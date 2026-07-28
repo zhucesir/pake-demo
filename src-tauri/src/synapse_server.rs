@@ -144,20 +144,78 @@ fn handle_exec(
         }
     };
 
-    // Construct JS payload to evaluate in the page
+    // Construct JS payload to evaluate in the page (self-contained inline execution)
     let js_command = match action {
-        "locate" => format!("window.__PageSynapse__.locate({})", serde_json::to_string(selector).unwrap()),
-        "click" => format!("window.__PageSynapse__.click({}, {})", x, y),
+        "locate" => format!("SynapseInline.locate({})", serde_json::to_string(selector).unwrap()),
+        "click" => format!("SynapseInline.click({}, {}, {})", x, y, serde_json::to_string(selector).unwrap()),
         "write" => format!(
-            "window.__PageSynapse__.write({}, {})",
+            "SynapseInline.write({}, {})",
             serde_json::to_string(selector).unwrap(),
             serde_json::to_string(text).unwrap()
         ),
-        _ => "window.__PageSynapse__.harvest()".to_string(),
+        "search" => format!("SynapseInline.search({})", serde_json::to_string(text).unwrap()),
+        _ => "SynapseInline.harvest()".to_string(),
     };
 
     let eval_js = format!(
         r#"(() => {{
+            const SynapseInline = {{
+                locate: (sel) => {{
+                    const el = document.querySelector(sel);
+                    if (!el) return {{ found: false, error: 'Element not found: ' + sel }};
+                    const rect = el.getBoundingClientRect();
+                    return {{ found: true, x: Math.round(rect.left + rect.width / 2), y: Math.round(rect.top + rect.height / 2), width: Math.round(rect.width), height: Math.round(rect.height), visible: rect.width > 0 && rect.height > 0 }};
+                }},
+                click: (x, y, sel) => {{
+                    const el = sel ? document.querySelector(sel) : (document.elementFromPoint(x, y) || document.body);
+                    if (!el) return {{ status: false, error: 'Element not found' }};
+                    el.click();
+                    return {{ status: true, action: 'click', targetTag: el.tagName }};
+                }},
+                write: (sel, txt) => {{
+                    const el = document.querySelector(sel);
+                    if (!el) return {{ status: false, error: 'Input not found: ' + sel }};
+                    el.focus();
+                    el.value = txt;
+                    el.dispatchEvent(new Event('input', {{ bubbles: true }}));
+                    el.dispatchEvent(new Event('change', {{ bubbles: true }}));
+                    return {{ status: (el.value === txt), actualValue: el.value, expectedText: txt }};
+                }},
+                search: (keyword) => {{
+                    const inputSel = "input[type='search'], input[placeholder*='搜索'], input.ttp-input, .search-input input, input";
+                    const inputEl = document.querySelector(inputSel);
+                    if (!inputEl) return {{ status: false, error: 'Search input not found on page' }};
+                    inputEl.focus();
+                    inputEl.value = keyword;
+                    inputEl.dispatchEvent(new Event('input', {{ bubbles: true }}));
+                    inputEl.dispatchEvent(new Event('change', {{ bubbles: true }}));
+                    const btnSel = "button[type='submit'], .search-button, button";
+                    const btnEl = document.querySelector(btnSel);
+                    if (btnEl) {{
+                        btnEl.click();
+                    }} else {{
+                        inputEl.dispatchEvent(new KeyboardEvent('keydown', {{ key: 'Enter', keyCode: 13, bubbles: true }}));
+                        if (inputEl.form) inputEl.form.submit();
+                    }}
+                    return {{ status: true, action: "search", keyword: keyword, triggered: true }};
+                }},
+                harvest: () => {{
+                    const ssrNext = document.getElementById('__NEXT_DATA__');
+                    const ssrNuxt = document.getElementById('__NUXT__');
+                    const results = Array.from(document.querySelectorAll('a')).map(a => ({{
+                        title: (a.innerText || a.textContent || '').trim(),
+                        href: a.href
+                    }})).filter(r => r.title.length > 4 && r.href && !r.href.startsWith('javascript')).slice(0, 15);
+                    return {{
+                        url: window.location.href,
+                        title: document.title,
+                        results: results,
+                        resultCount: results.length,
+                        hasSSR: !!(ssrNext || ssrNuxt || window.__INITIAL_STATE__),
+                        ssrData: ssrNext ? JSON.parse(ssrNext.textContent) : (window.__INITIAL_STATE__ || null)
+                    }};
+                }}
+            }};
             const send = (id, res, isErr) => {{
                 const payload = isErr ? {{ id: id, error: String(res) }} : {{ id: id, result: res }};
                 if (window.__PageSynapseSendCallback__) {{
@@ -171,9 +229,6 @@ fn handle_exec(
                 }}
             }};
             try {{
-                if (!window.__PageSynapse__) {{
-                    throw new Error("PageSynapse JS not loaded yet in this frame");
-                }}
                 const res = {};
                 send('{}', res, false);
             }} catch (err) {{

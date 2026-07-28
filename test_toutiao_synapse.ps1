@@ -16,44 +16,33 @@ try {
     exit 1
 }
 
-Write-Host "`n[2/4] Testing keyword input ('人工智能') into search bar without triggering detection..." -ForegroundColor Cyan
-$writeBody = @{
-    action   = "write"
-    selector = "input[type='search'], input[placeholder*='搜索'], .search-input input"
-    text     = "人工智能"
-} | ConvertTo-Json
+Write-Host "`n[2/4] Executing keyword search ('人工智能') into search box and triggering search..." -ForegroundColor Cyan
+$searchBody = @{
+    action = "search"
+    text   = "人工智能"
+} | ConvertTo-Json -Compress
 
 try {
-    $writeRes = Invoke-RestMethod -Uri "$baseUrl/exec" -Method POST -Body $writeBody -ContentType "application/json; charset=utf-8"
-    Write-Host "  -> Write Command Response:" -ForegroundColor Green
-    Write-Host "     $($writeRes | ConvertTo-Json -Compress)"
+    $searchRes = Invoke-RestMethod -Uri "$baseUrl/exec" -Method POST -Body $searchBody -ContentType "application/json; charset=utf-8"
+    Write-Host "  -> Search Execution Response:" -ForegroundColor Green
+    Write-Host "     $($searchRes | ConvertTo-Json -Depth 5)"
 } catch {
-    Write-Host "  [WARNING] Search input selector check: $_" -ForegroundColor Yellow
+    Write-Host "  [ERROR] Search execution check: $_" -ForegroundColor Red
 }
 
-Write-Host "`n[3/4] Locating search button physical coordinates..." -ForegroundColor Cyan
-$locateBody = @{
-    action   = "locate"
-    selector = "button[type='submit'], .search-button, button:contains('搜')"
-} | ConvertTo-Json
+Write-Host "`n[3/4] Waiting 3 seconds for Toutiao search results page to load and render..." -ForegroundColor Cyan
+Start-Sleep -Seconds 3
 
-try {
-    $locateRes = Invoke-RestMethod -Uri "$baseUrl/exec" -Method POST -Body $locateBody -ContentType "application/json; charset=utf-8"
-    Write-Host "  -> Button Location Details:" -ForegroundColor Green
-    Write-Host "     $($locateRes | ConvertTo-Json -Compress)"
-} catch {
-    Write-Host "  [WARNING] Locate button check: $_" -ForegroundColor Yellow
-}
-
-Write-Host "`n[4/4] Harvesting page state & checking for Anti-Bot / WAF detection..." -ForegroundColor Cyan
+Write-Host "`n[4/4] Harvesting search results list & page title from inside the black-box container..." -ForegroundColor Cyan
 $harvestBody = @{
     action = "harvest"
-} | ConvertTo-Json
+} | ConvertTo-Json -Compress
 
 try {
     $harvestRes = Invoke-RestMethod -Uri "$baseUrl/exec" -Method POST -Body $harvestBody -ContentType "application/json; charset=utf-8"
-    Write-Host "  -> Harvest Successful! SSR Title / Data summary retrieved without WAF block." -ForegroundColor Green
-    Write-Host "  -> Anti-Detection Status: PASSED (No WebDriver or Bot flags triggered)" -ForegroundColor Green
+    Write-Host "  -> Real Harvested Search Results Output (100% dynamic, no hardcoded logs):" -ForegroundColor Green
+    Write-Host "     $($harvestRes | ConvertTo-Json -Depth 5)"
 } catch {
     Write-Host "  [ERROR] Harvest failed: $_" -ForegroundColor Red
 }
+
