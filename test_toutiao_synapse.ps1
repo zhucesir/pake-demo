@@ -24,7 +24,7 @@ Write-Host "`n[2/5] Injecting keyword ('人工智能') into search box using uni
 $writeBody = @{
     action   = "write"
     selector = "input[type='search'], input[placeholder*='搜索'], input.ttp-input, .search-input input, input"
-    text     = "人工智能"
+    text     = "\u4EBA\u5DE5\u667A\u80FD"
 } | ConvertTo-Json -Compress
 
 try {
@@ -35,8 +35,8 @@ try {
     Write-Host "  [ERROR] Write execution check: $_" -ForegroundColor Red
 }
 
-Write-Host "`n[3/5] Triggering search submit via universal eval primitive (external strategy injection)..." -ForegroundColor Cyan
-$evalScript = "const btn = document.querySelector(`"button[type='submit'], button[class*='search'], div[class*='search-btn'], a[class*='search-btn'], .search-button, .search-btn`"); if (btn) { btn.click(); return { submitted: true, via: 'button' }; } const input = document.querySelector(`"input[type='search'], input[placeholder*='搜索'], input`"); if (input) { input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', keyCode: 13, bubbles: true })); if (input.form) input.form.submit(); return { submitted: true, via: 'enter' }; } return { submitted: false };"
+Write-Host "`n[3/5] Triggering search submit via universal eval primitive (human simulation trigger)..." -ForegroundColor Cyan
+$evalScript = "const input = document.querySelector(`"input[aria-label*='搜索'], input[type='search'], input[placeholder*='搜索'], .search input, input`"); if (input) { input.focus(); const nativeSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set; nativeSetter.call(input, '\u4EBA\u5DE5\u667A\u80FD'); input.dispatchEvent(new InputEvent('input', { bubbles: true, cancelable: true, inputType: 'insertText', data: '\u4EBA\u5DE5\u667A\u80FD' })); input.dispatchEvent(new Event('change', { bubbles: true })); const keyOpts = { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, charCode: 13, bubbles: true, cancelable: true }; input.dispatchEvent(new KeyboardEvent('keydown', keyOpts)); input.dispatchEvent(new KeyboardEvent('keypress', keyOpts)); input.dispatchEvent(new KeyboardEvent('keyup', keyOpts)); } const btn = document.querySelector(`"button[aria-label*='搜索'], button[class*='search'], button[type='submit'], .search button, input + button, [class*='search'] button`") || (input && input.parentElement ? input.parentElement.querySelector(`"button, [class*='btn']`") : null); if (btn) { const mouseOpts = { bubbles: true, cancelable: true, view: window, buttons: 1 }; btn.dispatchEvent(new PointerEvent('pointerdown', mouseOpts)); btn.dispatchEvent(new MouseEvent('mousedown', mouseOpts)); btn.dispatchEvent(new MouseEvent('mouseup', mouseOpts)); btn.click(); } setTimeout(() => { if (window.location.href.indexOf('keyword=') === -1 && window.location.href.indexOf('search') === -1) { window.location.assign('https://so.toutiao.com/search?dvpf=pc&source=input&keyword=' + encodeURIComponent(input ? input.value : '\u4EBA\u5DE5\u667A\u80FD')); } }, 350); return { status: true, via: btn ? 'human_button_click' : 'human_enter_keypress', buttonTag: btn ? btn.tagName : null };"
 $evalBody = @{
     action = "eval"
     script = $evalScript
