@@ -134,15 +134,7 @@ jobs:
         with:
           mode: build
 
-      - name: Download CLI Artifact
-        if: github.event_name != 'workflow_dispatch'
-        uses: actions/download-artifact@v7
-        with:
-          name: pake-cli-dist
-          path: dist
-
-      - name: Build CLI (workflow_dispatch)
-        if: github.event_name == 'workflow_dispatch'
+      - name: Build CLI
         run: pnpm run cli:build
 
       - name: Setup mold linker
