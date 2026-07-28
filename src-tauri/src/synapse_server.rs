@@ -57,6 +57,11 @@ fn handle_connection(mut stream: TcpStream, state: Arc<ServerState>, app: AppHan
     };
 
     let req_str = String::from_utf8_lossy(&buffer[..bytes_read]);
+    if req_str.to_lowercase().contains("expect: 100-continue") {
+        let _ = stream.write_all(b"HTTP/1.1 100 Continue\r\n\r\n");
+        let _ = stream.flush();
+    }
+
     let mut lines = req_str.lines();
     let request_line = match lines.next() {
         Some(l) => l,
@@ -71,14 +76,41 @@ fn handle_connection(mut stream: TcpStream, state: Arc<ServerState>, app: AppHan
     let method = parts[0];
     let path = parts[1];
 
-    // Find HTTP Body
-    let body_str = if let Some(idx) = req_str.find("\r\n\r\n") {
-        &req_str[idx + 4..]
+    let content_length: usize = req_str
+        .lines()
+        .find_map(|l| {
+            if l.to_lowercase().starts_with("content-length:") {
+                l.split(':').nth(1)?.trim().parse().ok()
+            } else {
+                None
+            }
+        })
+        .unwrap_or(0);
+
+    let mut full_body = String::new();
+    let header_end_idx = if let Some(idx) = req_str.find("\r\n\r\n") {
+        idx + 4
     } else if let Some(idx) = req_str.find("\n\n") {
-        &req_str[idx + 2..]
+        idx + 2
     } else {
-        ""
+        req_str.len()
     };
+
+    if header_end_idx < req_str.len() {
+        full_body.push_str(&req_str[header_end_idx..]);
+    }
+
+    while full_body.len() < content_length {
+        let mut extra_buf = [0u8; 4096];
+        match stream.read(&mut extra_buf) {
+            Ok(n) if n > 0 => {
+                full_body.push_str(&String::from_utf8_lossy(&extra_buf[..n]));
+            }
+            _ => break,
+        }
+    }
+
+    let body_str = full_body.as_str();
 
     if method == "GET" && path.starts_with("/status") {
         let status_json = format!(
@@ -144,7 +176,9 @@ fn handle_exec(
         }
     };
 
-    // Construct JS payload to evaluate in the page (self-contained inline execution)
+    let script = req_json.get("script").and_then(|v| v.as_str()).unwrap_or("");
+
+    // Construct JS payload to evaluate in the page (universal primitives, zero hardcoded business logic)
     let js_command = match action {
         "locate" => format!("SynapseInline.locate({})", serde_json::to_string(selector).unwrap()),
         "click" => format!("SynapseInline.click({}, {}, {})", x, y, serde_json::to_string(selector).unwrap()),
@@ -153,7 +187,7 @@ fn handle_exec(
             serde_json::to_string(selector).unwrap(),
             serde_json::to_string(text).unwrap()
         ),
-        "search" => format!("SynapseInline.search({})", serde_json::to_string(text).unwrap()),
+        "eval" => format!("(() => {{ {} }})()", script),
         _ => "SynapseInline.harvest()".to_string(),
     };
 
@@ -180,24 +214,6 @@ fn handle_exec(
                     el.dispatchEvent(new Event('input', {{ bubbles: true }}));
                     el.dispatchEvent(new Event('change', {{ bubbles: true }}));
                     return {{ status: (el.value === txt), actualValue: el.value, expectedText: txt }};
-                }},
-                search: (keyword) => {{
-                    const inputSel = "input[type='search'], input[placeholder*='搜索'], input.ttp-input, .search-input input, input";
-                    const inputEl = document.querySelector(inputSel);
-                    if (!inputEl) return {{ status: false, error: 'Search input not found on page' }};
-                    inputEl.focus();
-                    inputEl.value = keyword;
-                    inputEl.dispatchEvent(new Event('input', {{ bubbles: true }}));
-                    inputEl.dispatchEvent(new Event('change', {{ bubbles: true }}));
-                    const btnSel = "button[type='submit'], .search-button, button";
-                    const btnEl = document.querySelector(btnSel);
-                    if (btnEl) {{
-                        btnEl.click();
-                    }} else {{
-                        inputEl.dispatchEvent(new KeyboardEvent('keydown', {{ key: 'Enter', keyCode: 13, bubbles: true }}));
-                        if (inputEl.form) inputEl.form.submit();
-                    }}
-                    return {{ status: true, action: "search", keyword: keyword, triggered: true }};
                 }},
                 harvest: () => {{
                     const ssrNext = document.getElementById('__NEXT_DATA__');
