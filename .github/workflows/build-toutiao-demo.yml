@@ -1,0 +1,17 @@
+name: Auto Build Toutiao RPA Demo
+
+on:
+  push:
+    branches: [ "main", "agent-rpa-poc" ]
+  workflow_dispatch:
+
+jobs:
+  build-toutiao:
+    uses: ./.github/workflows/single-app.yaml
+    with:
+      name: "toutiao"
+      title: "Toutiao"
+      name_zh: "今日头条"
+      url: "https://www.toutiao.com/"
+      width: 1280
+      height: 800
