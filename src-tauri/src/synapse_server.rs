@@ -158,22 +158,26 @@ fn handle_exec(
 
     let eval_js = format!(
         r#"(() => {{
+            const send = (id, res, isErr) => {{
+                const payload = isErr ? {{ id: id, error: String(res) }} : {{ id: id, result: res }};
+                if (window.__PageSynapseSendCallback__) {{
+                    window.__PageSynapseSendCallback__(JSON.stringify(payload));
+                }} else {{
+                    fetch('http://127.0.0.1:{}/callback', {{
+                        method: 'POST',
+                        headers: {{ 'Content-Type': 'application/json' }},
+                        body: JSON.stringify(payload)
+                    }}).catch(e => console.error(e));
+                }}
+            }};
             try {{
                 const res = {};
-                fetch('http://127.0.0.1:{}/callback', {{
-                    method: 'POST',
-                    headers: {{ 'Content-Type': 'application/json' }},
-                    body: JSON.stringify({{ id: '{}', result: res }})
-                }}).catch(e => console.error(e));
+                send('{}', res, false);
             }} catch (err) {{
-                fetch('http://127.0.0.1:{}/callback', {{
-                    method: 'POST',
-                    headers: {{ 'Content-Type': 'application/json' }},
-                    body: JSON.stringify({{ id: '{}', error: String(err) }})
-                }}).catch(e => console.error(e));
+                send('{}', err, true);
             }}
         }})();"#,
-        js_command, port, req_id, port, req_id
+        port, js_command, req_id, req_id
     );
 
     if let Err(e) = window.eval(&eval_js) {

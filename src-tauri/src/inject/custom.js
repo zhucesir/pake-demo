@@ -8,6 +8,18 @@
 
   console.log('[PageSynapse] Initializing 0ms In-Page Bridge & Military Rules...');
 
+  // Setup CSP-resistant callback sender using XMLHttpRequest fallback
+  window.__PageSynapseSendCallback__ = (jsonPayload) => {
+    try {
+      const xhr = new XMLHttpRequest();
+      xhr.open('POST', 'http://127.0.0.1:39999/callback', true);
+      xhr.setRequestHeader('Content-Type', 'application/json');
+      xhr.send(jsonPayload);
+    } catch (e) {
+      console.error('[PageSynapse] Callback error:', e);
+    }
+  };
+
   // --------------------------------------------------------------------------
   // 1. Military Rule 6: Client Hints & UA Brand Cleansing (0ms Shielding)
   // --------------------------------------------------------------------------
