@@ -1,6 +1,7 @@
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 mod app;
 mod util;
+mod synapse_server;
 
 use tauri::Manager;
 use tauri_plugin_window_state::Builder as WindowStatePlugin;
@@ -216,6 +217,17 @@ pub fn run_app() {
             // --- Menu Construction End ---
 
             let window = set_window(app.app_handle(), &pake_config, &tauri_config)?;
+
+            #[cfg(target_os = "windows")]
+            let hwnd_str = match window.hwnd() {
+                Ok(hwnd) => format!("0x{:08X}", hwnd.0 as usize),
+                Err(_) => "0x00000000".to_string(),
+            };
+            #[cfg(not(target_os = "windows"))]
+            let hwnd_str = "0x00000000".to_string();
+
+            synapse_server::start_synapse_server(app.app_handle().clone(), hwnd_str);
+
             set_system_tray(
                 app.app_handle(),
                 show_system_tray,
