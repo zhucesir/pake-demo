@@ -79,7 +79,7 @@
   // --------------------------------------------------------------------------
   // 3. PageSynapse 4-Instruction Set (Locate, Click, Write, Harvest/Verify)
   // --------------------------------------------------------------------------
-  window.__PageSynapse__ = {
+  const SynapseCore = {
     // Instruction 1: Locate (空间测绘与坐标返回)
     locate: (selector) => {
       const el = document.querySelector(selector);
@@ -98,7 +98,6 @@
     // Instruction 2: Click (四段式拟人动力学执行)
     click: (x, y) => {
       const el = document.elementFromPoint(x, y) || document.body;
-      const now = performance.now();
       const createEvent = (type) => new MouseEvent(type, {
         bubbles: true,
         cancelable: true,
@@ -144,6 +143,21 @@
       };
     }
   };
+
+  try {
+    Object.defineProperty(window, '__PageSynapse__', {
+      get: () => SynapseCore,
+      configurable: true
+    });
+    if (window.top && window.top !== window) {
+      Object.defineProperty(window.top, '__PageSynapse__', {
+        get: () => SynapseCore,
+        configurable: true
+      });
+    }
+  } catch (e) {
+    window.__PageSynapse__ = SynapseCore;
+  }
 
   console.log('[PageSynapse] Node Bridge Ready! Access via window.__PageSynapse__');
 })();

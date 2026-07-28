@@ -171,6 +171,9 @@ fn handle_exec(
                 }}
             }};
             try {{
+                if (!window.__PageSynapse__) {{
+                    throw new Error("PageSynapse JS not loaded yet in this frame");
+                }}
                 const res = {};
                 send('{}', res, false);
             }} catch (err) {{
