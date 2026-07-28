@@ -1,4 +1,4 @@
-name: Auto Build Toutiao RPA Demo
+name: Build Toutiao RPA Demo (Windows Only)
 
 on:
   push:
@@ -6,12 +6,50 @@ on:
   workflow_dispatch:
 
 jobs:
-  build-toutiao:
-    uses: ./.github/workflows/single-app.yaml
-    with:
-      name: "toutiao"
-      title: "Toutiao"
-      name_zh: "今日头条"
-      url: "https://www.toutiao.com/"
-      width: 1280
-      height: 800
+  build-windows:
+    name: Build Toutiao Node Container (Windows x64)
+    runs-on: windows-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: stable
+
+      - name: Setup Node.js & pnpm
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install pnpm
+        run: npm install -g pnpm@10.26.2
+
+      - name: Install dependencies
+        run: pnpm install --no-frozen-lockfile
+
+      - name: Build Pake CLI
+        run: pnpm run cli:build
+
+      - name: Package Toutiao Windows App (MSI / EXE)
+        run: |
+          node dist/cli.js "https://www.toutiao.com/" --name "Toutiao" --width 1280 --height 800 --targets x64
+          New-Item -Path "output\windows" -ItemType Directory -Force
+          if (Test-Path "Toutiao.msi") {
+            Move-Item -Path "Toutiao.msi" -Destination "output\windows\Toutiao_x64.msi"
+          } elseif (Test-Path "src-tauri\target\x86_64-pc-windows-msvc\release\bundle\msi\*.msi") {
+            Move-Item -Path "src-tauri\target\x86_64-pc-windows-msvc\release\bundle\msi\*.msi" -Destination "output\windows\Toutiao_x64.msi"
+          }
+          if (Test-Path "src-tauri\target\x86_64-pc-windows-msvc\release\pake.exe") {
+            Copy-Item -Path "src-tauri\target\x86_64-pc-windows-msvc\release\pake.exe" -Destination "output\windows\Toutiao_x64.exe"
+          }
+
+      - name: Upload Windows Toutiao Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: Toutiao-Windows-Demo
+          path: output/windows/*.*
+          retention-days: 7
